@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'models.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'models/app_state.dart';
+import 'models/user_role.dart';
 import 'screens/login_page.dart';
 import 'screens/signup_page.dart';
 import 'screens/home_page.dart';
@@ -10,7 +13,9 @@ import 'screens/customer_worker_detail_pages.dart';
 import 'screens/service_list_page.dart';
 import 'theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(); // On Android, reads config from google-services.json
   runApp(const MyApp());
 }
 
@@ -150,7 +155,10 @@ class _MyAppState extends State<MyApp> {
               );
             }
           },
-          onLogout: () {
+          onLogout: () async {
+            try {
+              await FirebaseAuth.instance.signOut();
+            } catch (_) {}
             setState(() {
               state.currentRole = null;
               state.customerProfile = null;

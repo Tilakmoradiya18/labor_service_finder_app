@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "345211277757",
+    "project_id": "labor-service-finder-app2",
+    "storage_bucket": "labor-service-finder-app2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:345211277757:android:9cc535dd9e3f86e46982d4",
+        "android_client_info": {
+          "package_name": "com.example.labor_service_finder_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0YpBLxtnJremrwtyi5QdfVkBNV9JJKv0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

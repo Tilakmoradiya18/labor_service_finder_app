@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/worker_profile.dart';
 
 class WorkerProfileSetupPage extends StatefulWidget {
   const WorkerProfileSetupPage({super.key, required this.onSubmit, this.initial});
@@ -32,6 +34,7 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
     'Mason',
   ];
   String? selectedService;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -115,30 +118,58 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () {
-                    final years = int.tryParse(experienceController.text.trim()) ?? 0;
-                    if (dob == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select DOB')));
-                      return;
-                    }
-                    if (selectedService == null || selectedService!.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a service')));
-                      return;
-                    }
-                    widget.onSubmit(
-                      WorkerProfile(
-                        fullName: fullNameController.text.trim(),
-                        phone: phoneController.text.trim(),
-                        dob: dob!,
-                        address: addressController.text.trim(),
-                        area: areaController.text.trim(),
-                        city: cityController.text.trim(),
-                        service: selectedService!,
-                        experienceYears: years,
-                      ),
-                    );
-                  },
-                  child: const Text('Save & Continue'),
+                  onPressed: _saving
+                      ? null
+                      : () async {
+                          final years = int.tryParse(experienceController.text.trim()) ?? 0;
+                          if (dob == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select DOB')));
+                            return;
+                          }
+                          if (selectedService == null || selectedService!.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a service')));
+                            return;
+                          }
+                          setState(() => _saving = true);
+                          final profile = WorkerProfile(
+                            fullName: fullNameController.text.trim(),
+                            phone: phoneController.text.trim(),
+                            dob: dob!,
+                            address: addressController.text.trim(),
+                            area: areaController.text.trim(),
+                            city: cityController.text.trim(),
+                            service: selectedService!,
+                            experienceYears: years,
+                          );
+                          try {
+                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                            if (uid != null) {
+                              await FirebaseFirestore.instance.collection('workers').doc(uid).set({
+                                'fullName': profile.fullName,
+                                'phone': profile.phone,
+                                'dob': profile.dob.toIso8601String(),
+                                'address': profile.address,
+                                'area': profile.area,
+                                'city': profile.city,
+                                'service': profile.service,
+                                'experienceYears': profile.experienceYears,
+                                'rating': profile.rating,
+                                'updatedAt': FieldValue.serverTimestamp(),
+                              }, SetOptions(merge: true));
+                            }
+                            if (!mounted) return;
+                            widget.onSubmit(profile);
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save profile')));
+                            }
+                          } finally {
+                            if (mounted) setState(() => _saving = false);
+                          }
+                        },
+                  child: _saving
+                      ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Save & Continue'),
                 ),
               ],
             ),
