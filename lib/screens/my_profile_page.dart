@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models.dart';
+import '../models/app_state.dart';
+import '../models/user_role.dart';
 
 class MyProfilePage extends StatelessWidget {
   const MyProfilePage({super.key, required this.state, required this.onView, required this.onUpdate, required this.onLogout});

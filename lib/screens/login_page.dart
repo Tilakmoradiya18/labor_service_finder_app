@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.onLoggedIn, required this.onGoToSignup});
@@ -15,6 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isObscure = true;
+  bool _loading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -63,12 +65,54 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
-                      onPressed: () {
-                        if (_formKey.currentState?.validate() ?? false) {
-                          widget.onLoggedIn();
-                        }
-                      },
-                      child: const Text('Login'),
+                      onPressed: _loading
+                          ? null
+                          : () async {
+                              if (!(_formKey.currentState?.validate() ?? false)) return;
+                              setState(() => _loading = true);
+                              final email = emailController.text.trim();
+                              final pass = passwordController.text; // don't trim passwords
+                              try {
+                                await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: pass);
+                                if (!mounted) return;
+                                widget.onLoggedIn();
+                              } on FirebaseAuthException catch (e) {
+                                final code = e.code.toLowerCase();
+                                String msg;
+                                switch (code) {
+                                  case 'invalid-credential':
+                                  case 'wrong-password':
+                                    msg = 'Incorrect email or password.';
+                                    break;
+                                  case 'user-not-found':
+                                    msg = 'No account found for this email.';
+                                    break;
+                                  case 'invalid-email':
+                                    msg = 'Enter a valid email address.';
+                                    break;
+                                  case 'too-many-requests':
+                                    msg = 'Too many attempts. Try again later.';
+                                    break;
+                                  case 'user-disabled':
+                                    msg = 'This account has been disabled.';
+                                    break;
+                                  default:
+                                    msg = e.message ?? 'Login failed';
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                                }
+                              } catch (_) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login failed')));
+                                }
+                              } finally {
+                                if (mounted) setState(() => _loading = false);
+                              }
+                            },
+                      child: _loading
+                          ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Login'),
                     ),
                     const SizedBox(height: 12),
                     TextButton(

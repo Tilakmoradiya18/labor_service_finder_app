@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/user_role.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key, required this.onSignedUp});
@@ -17,6 +18,7 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController passwordController = TextEditingController();
   UserRole role = UserRole.customer;
   bool isObscure = true;
+  bool _loading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -73,12 +75,34 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState?.validate() ?? false) {
-                        widget.onSignedUp(role);
-                      }
-                    },
-                    child: const Text('Continue'),
+                    onPressed: _loading
+                        ? null
+                        : () async {
+                            if (!(_formKey.currentState?.validate() ?? false)) return;
+                            setState(() => _loading = true);
+                            try {
+                              await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                                email: emailController.text.trim(),
+                                password: passwordController.text,
+                              );
+                              if (!mounted) return;
+                              widget.onSignedUp(role);
+                            } on FirebaseAuthException catch (e) {
+                              final msg = e.message ?? 'Signup failed';
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+                              }
+                            } catch (_) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signup failed')));
+                              }
+                            } finally {
+                              if (mounted) setState(() => _loading = false);
+                            }
+                          },
+                    child: _loading
+                        ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Continue'),
                   ),
                 ],
               ),

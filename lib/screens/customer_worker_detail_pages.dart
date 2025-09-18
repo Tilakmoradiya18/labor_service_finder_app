@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models.dart';
+import '../models/customer_profile.dart';
+import '../models/worker_profile.dart';
 
 class WorkerDetailPage extends StatelessWidget {
   const WorkerDetailPage({super.key, required this.profile});
