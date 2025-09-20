@@ -10,7 +10,23 @@ class HomePage extends StatefulWidget {
   final void Function(BuildContext, String) onOpenService;
 
   static const services = [
-    'Electrician', 'Plumber', 'Painter', 'Carpenter', 'AC Repair', 'Gardener', 'Cleaning', 'Mechanic'
+    'Electrician',
+    'Plumber',
+    'Painter',
+    'Carpenter',
+    'AC Repair',
+    'Gardener',
+    'House Cleaning',
+    'Mechanic',
+    // New services
+    'CCTV Installation',
+    'Pest Control',
+    'House Shifting',
+    'Cook',
+    'Driver',
+    'Computer Repair',
+    'Beautician',
+    'Roofer',
   ];
 
   @override
@@ -318,6 +334,14 @@ class _ColoredServiceIcon extends StatelessWidget {
     if (t.contains('garden')) return Icons.yard;
     if (t.contains('clean')) return Icons.cleaning_services;
     if (t.contains('mechanic')) return Icons.build_circle;
+    if (t.contains('cctv') || t.contains('security')) return Icons.videocam;
+    if (t.contains('pest')) return Icons.bug_report;
+    if (t.contains('shift') || t.contains('mover') || t.contains('pack')) return Icons.local_shipping;
+    if (t.contains('cook') || t.contains('chef')) return Icons.restaurant;
+    if (t.contains('driver') || t.contains('taxi') || t.contains('car')) return Icons.directions_car;
+    if (t.contains('computer') || t.contains('laptop') || t.contains('pc')) return Icons.computer;
+    if (t.contains('beaut') || t.contains('salon')) return Icons.brush;
+    if (t.contains('roof')) return Icons.roofing;
     return Icons.handyman;
   }
 

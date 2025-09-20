@@ -8,7 +8,8 @@ class WorkerProfile {
     required this.city,
     required this.service,
     required this.experienceYears,
-    this.rating = 4.5,
+    this.rating = 0,
+    this.available = true,
   });
 
   final String fullName;
@@ -20,4 +21,5 @@ class WorkerProfile {
   final String service;
   final int experienceYears;
   double rating;
+  bool available;
 }

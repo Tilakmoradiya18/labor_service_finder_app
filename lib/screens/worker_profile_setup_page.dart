@@ -27,9 +27,17 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
     'Carpenter',
     'Painter',
     'AC Repair',
-    'Mechanic',
-    'House Cleaning',
     'Gardener',
+    'House Cleaning',
+    'Mechanic',
+    'CCTV Installation',
+    'Pest Control',
+    'House Shifting',
+    'Cook',
+    'Driver',
+    'Computer Repair',
+    'Beautician',
+    'Roofer',
     'Welder',
     'Mason',
   ];
@@ -140,6 +148,7 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
                             city: cityController.text.trim(),
                             service: selectedService!,
                             experienceYears: years,
+                            available: true,
                           );
                           try {
                             final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -154,6 +163,8 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
                                 'service': profile.service,
                                 'experienceYears': profile.experienceYears,
                                 'rating': profile.rating,
+                                'ratingCount': FieldValue.increment(0),
+                                'available': profile.available,
                                 'updatedAt': FieldValue.serverTimestamp(),
                               }, SetOptions(merge: true));
                             }
