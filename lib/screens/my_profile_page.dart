@@ -3,6 +3,8 @@ import '../models/app_state.dart';
 import '../models/user_role.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'premium_plans_page.dart';
+import 'favorites_page.dart';
 
 class MyProfilePage extends StatefulWidget {
   const MyProfilePage({super.key, required this.state, required this.onView, required this.onUpdate, required this.onLogout});
@@ -80,20 +82,31 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 const SizedBox(height: 12),
                 _TileButton(
                   icon: Icons.workspace_premium_outlined,
-                  label: 'Get Premium',
+                  label: widget.state.workerProfile?.premium == true
+                      ? 'Premium Active'
+                      : 'Get Premium',
                   onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('Premium'),
-                        content: const Text('Premium boosts your visibility. (UI only)'),
-                        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PremiumPlansPage(state: widget.state),
                       ),
                     );
                   },
                 ),
                 const SizedBox(height: 12),
               ],
+              _TileButton(
+                icon: Icons.favorite_outline,
+                label: 'Favorites',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const FavoritesPage(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
               _TileButton(icon: Icons.logout, label: 'Logout', onTap: widget.onLogout, color: Colors.red.shade50, textColor: Colors.red),
             ],
           ),

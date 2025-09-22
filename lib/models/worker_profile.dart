@@ -10,6 +10,9 @@ class WorkerProfile {
     required this.experienceYears,
     this.rating = 0,
     this.available = true,
+    this.premium = false,
+    this.premiumUntil,
+    this.premiumPlan,
   });
 
   final String fullName;
@@ -22,4 +25,7 @@ class WorkerProfile {
   final int experienceYears;
   double rating;
   bool available;
+  bool premium;
+  DateTime? premiumUntil;
+  String? premiumPlan;
 }

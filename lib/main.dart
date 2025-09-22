@@ -75,6 +75,9 @@ class _MyAppState extends State<MyApp> {
               : int.tryParse((data['experienceYears'] ?? '').toString()) ?? 0,
           rating: _parseDouble(data['rating'], 0.0),
           available: (data['available'] is bool) ? data['available'] as bool : true,
+          premium: (data['premium'] is bool) ? data['premium'] as bool : false,
+          premiumUntil: _parseDob(data['premiumUntil']),
+          premiumPlan: (data['premiumPlan'] ?? '') == '' ? null : (data['premiumPlan'] as String),
         );
         state.customerProfile = null;
       } else if (customerSnap.exists) {

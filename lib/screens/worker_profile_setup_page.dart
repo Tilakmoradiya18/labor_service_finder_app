@@ -149,6 +149,8 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
                             service: selectedService!,
                             experienceYears: years,
                             available: true,
+                            premium: false,
+                            premiumPlan: null,
                           );
                           try {
                             final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -165,6 +167,9 @@ class _WorkerProfileSetupPageState extends State<WorkerProfileSetupPage> {
                                 'rating': profile.rating,
                                 'ratingCount': FieldValue.increment(0),
                                 'available': profile.available,
+                                'premium': profile.premium,
+                                'premiumUntil': null,
+                                'premiumPlan': null,
                                 'updatedAt': FieldValue.serverTimestamp(),
                               }, SetOptions(merge: true));
                             }

@@ -52,6 +52,8 @@ class _ServiceListPageState extends State<ServiceListPage> {
           : int.tryParse((data['experienceYears'] ?? '').toString()) ?? 0,
       rating: parseDouble(data['rating'], 0.0),
       available: (data['available'] is bool) ? data['available'] as bool : true,
+      premium: (data['premium'] is bool) ? data['premium'] as bool : false,
+      premiumUntil: parseDob(data['premiumUntil']),
     );
   }
 
@@ -100,32 +102,71 @@ class _ServiceListPageState extends State<ServiceListPage> {
             return okArea && okCity && okRating;
           }).toList();
 
+          // Sort: premium first, then by plan priority (1 Year > 6 Months > 1 Month),
+          // then by remaining premium period (later expiry first), then rating desc, then name
+          items.sort((a, b) {
+            final wa = (a['p'] as WorkerProfile);
+            final wb = (b['p'] as WorkerProfile);
+            final pa = wa.premium && (wa.premiumUntil == null || wa.premiumUntil!.isAfter(DateTime.now()));
+            final pb = wb.premium && (wb.premiumUntil == null || wb.premiumUntil!.isAfter(DateTime.now()));
+            if (pa != pb) return pb ? 1 : -1; // premium true first
+
+            int rank(String? plan) {
+              final p = (plan ?? '').toLowerCase();
+              if (p.contains('year')) return 3;
+              if (p.contains('6')) return 2; // 6 months
+              if (p.contains('month')) return 1; // 1 month
+              return 0;
+            }
+            final ra = rank(wa.premiumPlan);
+            final rb = rank(wb.premiumPlan);
+            if (ra != rb) return rb.compareTo(ra); // higher rank first
+
+            // If same plan rank, prefer later expiry (longer remaining premium)
+            final da = wa.premiumUntil;
+            final db = wb.premiumUntil;
+            if (da != null && db != null && da.compareTo(db) != 0) {
+              return db.compareTo(da); // later expiry first
+            }
+
+            // Then by rating desc
+            final r = wb.rating.compareTo(wa.rating);
+            if (r != 0) return r;
+
+            // Finally by name
+            return wa.fullName.toLowerCase().compareTo(wb.fullName.toLowerCase());
+          });
+
           if (items.isEmpty) {
             return const Center(child: Text('No workers found. Try adjusting filters.'));
           }
 
-          final uid = FirebaseAuth.instance.currentUser?.uid;
-          if (uid == null) {
-            // Not logged in; show list with average rating badge and empty stars
-            return _buildListWithUserRatings(context, items, const {});
-          }
-
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collectionGroup('ratings')
-                .where(FieldPath.documentId, isEqualTo: uid)
-                .snapshots(),
-            builder: (context, rateSnap) {
-              final ratingDocs = rateSnap.data?.docs ?? [];
-              final Map<String, double> userRatingsByWorker = {};
-              for (final d in ratingDocs) {
-                final workerId = d.reference.parent.parent?.id;
-                if (workerId != null) {
-                  final v = (d.data()['value'] as num?)?.toDouble() ?? 0.0;
-                  userRatingsByWorker[workerId] = v;
-                }
+          return StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, authSnap) {
+              final uid = authSnap.data?.uid;
+              if (uid == null) {
+                return _buildListWithUserRatings(context, items, null, const <String>{}, false);
               }
-              return _buildListWithUserRatings(context, items, userRatingsByWorker);
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance.collection('workers').doc(uid).snapshots(),
+                builder: (context, roleSnap) {
+                  final isWorkerUser = roleSnap.data?.exists == true;
+                  final favColl = FirebaseFirestore.instance
+                      .collection(isWorkerUser ? 'workers' : 'customers')
+                      .doc(uid)
+                      .collection('favorites');
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: favColl.snapshots(),
+                    builder: (context, favSnap) {
+                      final favIds = <String>{
+                        for (final d in (favSnap.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[])) d.id
+                      };
+                      return _buildListWithUserRatings(context, items, uid, favIds, isWorkerUser);
+                    },
+                  );
+                },
+              );
             },
           );
         },
@@ -133,7 +174,7 @@ class _ServiceListPageState extends State<ServiceListPage> {
     );
   }
 
-  Widget _buildListWithUserRatings(BuildContext context, List<Map<String, Object>> items, Map<String, double> userRatings) {
+  Widget _buildListWithUserRatings(BuildContext context, List<Map<String, Object>> items, String? uid, Set<String> favoriteIds, bool isWorkerUser) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
@@ -142,7 +183,8 @@ class _ServiceListPageState extends State<ServiceListPage> {
         final it = items[index];
         final String docId = it['id'] as String;
         final WorkerProfile w = it['p'] as WorkerProfile;
-  final double myRating = _overrideUserRatings[docId] ?? userRatings[docId] ?? 0.0;
+        final double myRatingBase = _overrideUserRatings[docId] ?? 0.0;
+        final bool isFav = favoriteIds.contains(docId);
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -173,106 +215,177 @@ class _ServiceListPageState extends State<ServiceListPage> {
                         ],
                       ),
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 16),
-                          const SizedBox(width: 4),
-                          Text(w.rating.toStringAsFixed(1)),
-                        ],
-                      ),
+                    const SizedBox(width: 8),
+                    // Keep badges on the top-right, move heart below them for better visual hierarchy
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.star, color: Colors.amber, size: 16),
+                                  const SizedBox(width: 4),
+                                  Text(w.rating.toStringAsFixed(1)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (w.premium && (w.premiumUntil == null || w.premiumUntil!.isAfter(DateTime.now())))
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.workspace_premium, color: Theme.of(context).colorScheme.primary, size: 16),
+                                    const SizedBox(width: 4),
+                                    Text('Premium', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        IconButton(
+                          tooltip: isFav ? 'Remove from Favorites' : 'Add to Favorites',
+                          onPressed: uid == null
+                              ? null
+                              : () => _toggleFavorite(uid, docId, isFav, isWorkerUser),
+                          icon: Icon(
+                            isFav ? Icons.favorite : Icons.favorite_border,
+                            color: isFav ? Colors.redAccent : Colors.grey,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Text('Rate: '),
-                    for (int i = 1; i <= 5; i++)
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        iconSize: 22,
-                        onPressed: () async {
-                          final uid = FirebaseAuth.instance.currentUser?.uid;
-                          if (uid == null) return;
-                          final workerRef = FirebaseFirestore.instance.collection('workers').doc(docId);
-                          final userRatingRef = workerRef.collection('ratings').doc(uid);
-                          // Optimistic UI update so stars fill immediately
-                          final prev = _overrideUserRatings[docId] ?? userRatings[docId] ?? 0.0;
-                          setState(() {
-                            _overrideUserRatings[docId] = i.toDouble();
-                          });
-                          try {
-                            await FirebaseFirestore.instance.runTransaction((txn) async {
-                              final workerSnap = await txn.get(workerRef);
-                              double oldAvg = 0.0;
-                              int count = 0;
-                              if (workerSnap.exists) {
-                                final data = workerSnap.data() as Map<String, dynamic>;
-                                oldAvg = (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0;
-                                count = (data['ratingCount'] is int)
-                                    ? data['ratingCount'] as int
-                                    : (data['ratingCount'] is num)
-                                        ? (data['ratingCount'] as num).toInt()
-                                        : 0;
-                              }
+                uid == null
+                    ? Row(
+                        children: [
+                          const Text('Rate: '),
+                          for (int i = 1; i <= 5; i++)
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              iconSize: 22,
+                              onPressed: () {},
+                              icon: Icon(
+                                i <= myRatingBase.round() ? Icons.star_rounded : Icons.star_border_rounded,
+                                color: Colors.amber,
+                              ),
+                              tooltip: '$i',
+                            ),
+                        ],
+                      )
+                    : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: FirebaseFirestore.instance
+                            .collection('workers')
+                            .doc(docId)
+                            .collection('ratings')
+                            .doc(uid)
+                            .snapshots(),
+                        builder: (context, userRateSnap) {
+                          final streamVal = (userRateSnap.data?.data()?['value'] as num?)?.toDouble() ?? 0.0;
+                          final myRating = _overrideUserRatings[docId] ?? streamVal;
+                          return Row(
+                            children: [
+                              const Text('Rate: '),
+                              for (int i = 1; i <= 5; i++)
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  iconSize: 22,
+                                  onPressed: () async {
+                                    final workerRef = FirebaseFirestore.instance.collection('workers').doc(docId);
+                                    final userRatingRef = workerRef.collection('ratings').doc(uid);
+                                    // Optimistic UI update so stars fill immediately
+                                    final prev = myRating;
+                                    setState(() {
+                                      _overrideUserRatings[docId] = i.toDouble();
+                                    });
+                                    try {
+                                      await FirebaseFirestore.instance.runTransaction((txn) async {
+                                        final workerSnap = await txn.get(workerRef);
+                                        double oldAvg = 0.0;
+                                        int count = 0;
+                                        if (workerSnap.exists) {
+                                          final data = workerSnap.data() as Map<String, dynamic>;
+                                          oldAvg = (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0;
+                                          count = (data['ratingCount'] is int)
+                                              ? data['ratingCount'] as int
+                                              : (data['ratingCount'] is num)
+                                                  ? (data['ratingCount'] as num).toInt()
+                                                  : 0;
+                                        }
 
-                              final userRatingSnap = await txn.get(userRatingRef);
-                              final newRating = i.toDouble();
-                              final oldSum = oldAvg * count;
-                              double newSum;
-                              int newCount;
-                              if (userRatingSnap.exists) {
-                                final prev = (userRatingSnap.data()!['value'] as num?)?.toDouble() ?? 0.0;
-                                newSum = oldSum - prev + newRating;
-                                newCount = count; // same rater updated their rating
-                              } else {
-                                newSum = oldSum + newRating;
-                                newCount = count + 1; // new rater
-                              }
+                                        final userRatingSnap = await txn.get(userRatingRef);
+                                        final newRating = i.toDouble();
+                                        final oldSum = oldAvg * count;
+                                        double newSum;
+                                        int newCount;
+                                        if (userRatingSnap.exists) {
+                                          final prev = (userRatingSnap.data()!['value'] as num?)?.toDouble() ?? 0.0;
+                                          newSum = oldSum - prev + newRating;
+                                          newCount = count; // same rater updated their rating
+                                        } else {
+                                          newSum = oldSum + newRating;
+                                          newCount = count + 1; // new rater
+                                        }
 
-                              final avg = newCount > 0 ? newSum / newCount : 0.0;
-                              final avg1 = double.parse(avg.toStringAsFixed(1));
+                                        final avg = newCount > 0 ? newSum / newCount : 0.0;
+                                        final avg1 = double.parse(avg.toStringAsFixed(1));
 
-                              txn.set(userRatingRef, {
-                                'value': newRating,
-                                'updatedAt': FieldValue.serverTimestamp(),
-                              }, SetOptions(merge: true));
+                                        txn.set(userRatingRef, {
+                                          'value': newRating,
+                                          'updatedAt': FieldValue.serverTimestamp(),
+                                        }, SetOptions(merge: true));
 
-                              txn.update(workerRef, {
-                                'rating': avg1,
-                                'ratingCount': newCount,
-                                'updatedAt': FieldValue.serverTimestamp(),
-                              });
-                            });
-                          } catch (e) {
-                            if (!mounted) return;
-                            // Revert optimistic update on failure
-                            setState(() {
-                              if (prev == 0.0) {
-                                _overrideUserRatings.remove(docId);
-                              } else {
-                                _overrideUserRatings[docId] = prev;
-                              }
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update rating')));
-                          }
+                                        txn.update(workerRef, {
+                                          'rating': avg1,
+                                          'ratingCount': newCount,
+                                          'updatedAt': FieldValue.serverTimestamp(),
+                                        });
+                                      });
+                                    } catch (e) {
+                                      if (!mounted) return;
+                                      // Revert optimistic update on failure
+                                      setState(() {
+                                        if (prev == 0.0) {
+                                          _overrideUserRatings.remove(docId);
+                                        } else {
+                                          _overrideUserRatings[docId] = prev;
+                                        }
+                                      });
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update rating')));
+                                    }
+                                  },
+                                  icon: Icon(
+                                    i <= myRating.round() ? Icons.star_rounded : Icons.star_border_rounded,
+                                    color: Colors.amber,
+                                  ),
+                                  tooltip: '$i',
+                                ),
+                            ],
+                          );
                         },
-                        icon: Icon(
-                          i <= myRating.round() ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: Colors.amber,
-                        ),
-                        tooltip: '$i',
                       ),
-                  ],
-                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -389,6 +502,26 @@ class _ServiceListPageState extends State<ServiceListPage> {
         );
       },
     );
+  }
+
+  Future<void> _toggleFavorite(String uid, String workerId, bool isFav, bool isWorkerUser) async {
+    try {
+      final favRef = FirebaseFirestore.instance
+          .collection(isWorkerUser ? 'workers' : 'customers')
+          .doc(uid)
+          .collection('favorites')
+          .doc(workerId);
+      if (isFav) {
+        await favRef.delete();
+      } else {
+        await favRef.set({
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update favorites')));
+    }
   }
 }
 

@@ -29,6 +29,16 @@ class HomePage extends StatefulWidget {
     'Roofer',
   ];
 
+  // Curated subset to show under "Popular Services" chips only
+  static const popularServices = [
+    'Electrician',
+    'Plumber',
+    'Painter',
+    'Carpenter',
+    'AC Repair',
+    'House Cleaning',
+  ];
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -170,10 +180,10 @@ class _HomePageState extends State<HomePage> {
                 height: 40,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: HomePage.services.length,
+                  itemCount: HomePage.popularServices.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
-                    final s = HomePage.services[index];
+                    final s = HomePage.popularServices[index];
                     final selected = _query.toLowerCase() == s.toLowerCase();
                     return ChoiceChip(
                       label: Text(s),
